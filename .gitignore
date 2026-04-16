@@ -1,0 +1,21 @@
+# Dependencies
+node_modules/
+
+# Environment files — never commit real secrets
+.env
+.env.local
+.env.*.local
+
+# Build output
+dist/
+build/
+
+# macOS
+.DS_Store
+
+# Claude Code local settings
+.claude/
+
+# Logs
+*.log
+npm-debug.log*

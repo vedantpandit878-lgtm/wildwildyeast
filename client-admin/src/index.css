@@ -1,0 +1,26 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --brand-black: #1A1A1A;
+  --brand-rust: #8B3A1A;
+  --brand-amber: #C97B2A;
+  --brand-gold: #D4A020;
+  --brand-cream: #F5F0E8;
+  --brand-charcoal: #2C2C2A;
+  --brand-white: #FFFFFF;
+}
+
+body {
+  font-family: 'Inter', sans-serif;
+  background-color: #F5F0E8;
+  color: #2C2C2A;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}
