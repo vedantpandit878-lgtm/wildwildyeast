@@ -222,8 +222,8 @@ class AgentAccessibilityService : AccessibilityService() {
         try {
             takeScreenshot(
                 Display.DEFAULT_DISPLAY, mainExecutor,
-                object : TakeScreenshotCallback {
-                    override fun onSuccess(screenshot: ScreenshotResult) {
+                object : AccessibilityService.TakeScreenshotCallback {
+                    override fun onSuccess(screenshot: AccessibilityService.ScreenshotResult) {
                         val hw = Bitmap.wrapHardwareBuffer(screenshot.hardwareBuffer, screenshot.colorSpace)
                         val sw = hw?.copy(Bitmap.Config.ARGB_8888, false)
                         screenshot.hardwareBuffer.close()
@@ -390,7 +390,7 @@ class AgentAccessibilityService : AccessibilityService() {
             .build()
         val accepted = dispatchGesture(
             gesture,
-            object : GestureResultCallback() {
+            object : AccessibilityService.GestureResultCallback() {
                 override fun onCompleted(gestureDescription: GestureDescription?) { if (cont.isActive) cont.resume(true) }
                 override fun onCancelled(gestureDescription: GestureDescription?) { if (cont.isActive) cont.resume(false) }
             },
