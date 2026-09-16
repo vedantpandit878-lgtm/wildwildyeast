@@ -39,7 +39,19 @@ to Claude Opus 4.8 if a request is refused. Adaptive thinking is on. Only the
 accessibility tree is sent each step; screenshots are sent only when the model
 asks for one or when the tree is nearly empty (web views, maps, games).
 
-## Build and install
+## Get the app without installing anything on a computer
+
+Every change pushed to GitHub builds the app automatically (see
+`.github/workflows/android-agent.yml`). To get the latest APK:
+
+1. Open the repository on GitHub, click the **Actions** tab, and open the most
+   recent **Build Voice Agent APK** run with a green tick.
+2. Scroll down to **Artifacts** and download **VoiceAgent-apk**. It is a zip
+   file containing `VoiceAgent.apk`. Doing this on the phone itself is easiest.
+3. On the phone, open the zip, tap `VoiceAgent.apk`, and allow installs from
+   this source when Android asks.
+
+## Build it yourself (optional)
 
 1. Open the `android-agent` folder in Android Studio (Ladybug or newer). It
    will create `local.properties` with your SDK path, which is what enables the
@@ -47,14 +59,17 @@ asks for one or when the tree is nearly empty (web views, maps, games).
 2. Enable **Developer options** and **USB debugging** on the phone, plug it in,
    and press **Run**. Or build an APK with `./gradlew :app:assembleDebug` and
    install `app/build/outputs/apk/debug/app-debug.apk`.
-3. Open **Voice Agent** on the phone and go through the setup screen:
+
+## First-time setup on the phone
+
+1. Open **Voice Agent** and go through the setup screen:
    1. Enable the accessibility service (Settings > Accessibility > Installed
       apps > Voice Agent). Android will warn you that the app can read the
       screen and perform actions. That is the point.
    2. Grant microphone and notification permissions.
    3. Paste your Anthropic API key and tap **Save key**. It is stored in the
       app's private storage on the phone only.
-4. A microphone bubble now floats over every app. Drag it anywhere. Tap it,
+2. A microphone bubble now floats over every app. Drag it anywhere. Tap it,
    speak, and watch. Tap it again to stop at any time.
 
 For the first tests, turn on **Ask before every tap** in the setup screen, and
@@ -118,8 +133,8 @@ android-agent/
 
 ## Status
 
-The `core` module is compiled and unit tested against the real Anthropic Java
-SDK (2.63.0). The `app` module was written against the Android 11+ APIs but
-has not yet been compiled or run on a device from this environment, because
-the Android SDK could not be downloaded here. Expect to fix small compile
-issues on the first build in Android Studio.
+The `core` module is compiled and unit tested against the Anthropic Java SDK
+(2.63.0). The `app` module compiles on GitHub Actions. It has not yet been
+exercised on a physical phone, so expect some rough edges on first use; the
+bubble's status line and `adb logcat -s VoiceAgent VoiceAgentService` show
+what the agent is doing.
