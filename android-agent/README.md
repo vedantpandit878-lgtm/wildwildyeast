@@ -27,6 +27,15 @@ It is built for testing on your own device. It is not a Play Store app.
                               TextToSpeech reads the result
 ```
 
+* **Learn once, replay for free.** The first time you say a command the AI
+  works it out and every successful step is recorded with a description of the
+  element it touched (label, id, position, app). The next time you say the same
+  or a similar command, `RoutineReplayer` re-finds each element on the live
+  screen and performs the steps with no API calls. If an element cannot be
+  found (the app changed, a pop-up appeared), the AI takes over from that
+  point and the corrected routine is saved. Risky taps still go through the
+  confirmation gate during replay. Routines are stored in the app's private
+  `routines.json`; the setup screen shows how many there are and can clear them.
 * `core/` is a plain JVM Kotlin module: screen model, tool definitions, the
   safety gate and the Claude loop. It has no Android dependency, so it compiles
   and runs its unit tests on any machine with a JDK (`./gradlew :core:test`).
@@ -87,8 +96,14 @@ without speaking.
 
 * **Speed.** Each step is one round trip to Claude, typically 3 to 8 seconds.
   A ride booking with a dozen screens takes about a minute.
-* **Cost.** Roughly 10 to 60 cents per task at Opus 5 pricing, depending on
-  length. The system prompt is cached; screenshots are the expensive part.
+* **Cost.** Roughly 10 to 60 cents the first time a task runs at Opus 5
+  pricing, depending on length. Repeats of the same command are free while the
+  replay succeeds. The system prompt is cached; screenshots are the expensive
+  part.
+* **Replay limits.** A routine replays the exact text it typed the first time,
+  so "message Mum I'm leaving" replays that same message. Say something new
+  and it becomes a new routine. Commands whose steps depend on live content
+  (choosing the cheapest ride) may still need the AI on some runs.
 * **Confirmation.** Two layers. The system prompt tells Claude to ask before
   irreversible actions. Independently, `SafetyGate` in the app intercepts taps
   on elements labelled Send, Pay, Confirm, Book, Order, Delete, Post and so on

@@ -89,11 +89,18 @@
             android:layout_height="wrap_content"
             android:text="Run voice command" />
 
+        <Button
+            android:id="@+id/btnForget"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="12dp"
+            android:text="Forget all saved routines" />
+
         <TextView
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginTop="20dp"
-            android:text="Once the service is enabled a small microphone bubble floats over every app. Tap it, speak, and watch. Tap it again to stop the agent at any time. The agent asks for confirmation before sending, paying, booking or deleting anything."
+            android:text="Once the service is enabled a small microphone bubble floats over every app. Tap it, speak, and watch. Tap it again to stop the agent at any time. The agent asks for confirmation before sending, paying, booking or deleting anything.\n\nThe first time you give a command the AI works it out (a few cents). It then remembers the steps, and the next time you say the same thing it replays them for free, only asking the AI again if the app has changed."
             android:textSize="14sp" />
     </LinearLayout>
 </ScrollView>

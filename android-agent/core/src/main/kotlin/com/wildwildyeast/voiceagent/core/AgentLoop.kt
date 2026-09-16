@@ -39,6 +39,8 @@ interface AgentListener {
     fun onStatus(text: String) {}
     fun onAction(step: Int, action: AgentAction) {}
     fun onModelText(text: String) {}
+    /** Called after the device performed an action, with the screen it acted on. */
+    fun onStepPerformed(action: AgentAction, before: ScreenState, result: ActionResult) {}
 }
 
 /**
@@ -52,11 +54,16 @@ class AgentLoop(
     private val config: AgentConfig = AgentConfig(),
     private val listener: AgentListener = object : AgentListener {},
 ) {
-    suspend fun run(goal: String): AgentOutcome {
+    /**
+     * @param context optional note about what already happened before the loop
+     *   started (for example steps a saved routine replayed) so the model
+     *   continues from the current screen instead of starting over.
+     */
+    suspend fun run(goal: String, context: String? = null): AgentOutcome {
         val history = mutableListOf<BetaMessageParam>()
         listener.onStatus("Reading screen")
         val first = device.capture(withScreenshot = false)
-        history += userMessage(initialPrompt(goal, first), first.screenshotPng)
+        history += userMessage(initialPrompt(goal, first, context), first.screenshotPng)
 
         var step = 0
         var consecutiveFailures = 0
@@ -135,6 +142,7 @@ class AgentLoop(
                         }
                         listener.onStatus(action.describe())
                         val result = device.perform(action)
+                        if (result.ok) listener.onStepPerformed(action, before, result)
                         var after = device.capture(withScreenshot = false)
                         if (after.nodes.size < config.autoScreenshotBelowNodes) {
                             // Tree is too thin to act on (web view, map, game): give the model pixels.
@@ -183,8 +191,9 @@ class AgentLoop(
         client.beta().messages().create(builder.build())
     }
 
-    private fun initialPrompt(goal: String, screen: ScreenState): String = buildString {
+    private fun initialPrompt(goal: String, screen: ScreenState, context: String?): String = buildString {
         append("Task from the user (spoken): \"").append(goal).append("\"\n\n")
+        context?.takeIf { it.isNotBlank() }?.let { append(it.trim()).append("\n\n") }
         val apps = device.installedAppNames()
         if (apps.isNotEmpty()) {
             append("Launchable apps on this phone: ").append(apps.take(200).joinToString(", ")).append("\n\n")

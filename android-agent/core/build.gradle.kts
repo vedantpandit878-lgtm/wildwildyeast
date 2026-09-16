@@ -16,6 +16,7 @@ kotlin {
 dependencies {
     api("com.anthropic:anthropic-java:2.63.0")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.11.0")
+    implementation("com.fasterxml.jackson.module:jackson-module-kotlin:2.19.4")
 
     testImplementation(kotlin("test"))
     testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.11.0")

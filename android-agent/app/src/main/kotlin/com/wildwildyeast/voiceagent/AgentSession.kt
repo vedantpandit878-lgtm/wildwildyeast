@@ -7,11 +7,13 @@ import com.anthropic.errors.UnauthorizedException
 import com.wildwildyeast.voiceagent.core.AgentAction
 import com.wildwildyeast.voiceagent.core.AgentConfig
 import com.wildwildyeast.voiceagent.core.AgentListener
-import com.wildwildyeast.voiceagent.core.AgentLoop
+import com.wildwildyeast.voiceagent.core.Assistant
+import com.wildwildyeast.voiceagent.core.JsonFileRoutineStore
 import com.wildwildyeast.voiceagent.core.SafetyGate
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
+import java.io.File
 import java.time.Duration
 
 /** Owns the currently running task: voice capture -> AgentLoop -> spoken result. */
@@ -19,6 +21,9 @@ class AgentSession(private val service: AgentAccessibilityService) {
 
     private var job: Job? = null
     val isRunning: Boolean get() = job?.isActive == true
+
+    /** Learned routines live in the app's private files directory. */
+    val routines = JsonFileRoutineStore(File(service.filesDir, "routines.json"))
 
     fun onBubbleTapped() {
         if (isRunning) stop() else startVoiceCommand()
@@ -70,9 +75,10 @@ class AgentSession(private val service: AgentAccessibilityService) {
             .apiKey(key)
             .timeout(Duration.ofMinutes(5))
             .build()
-        val loop = AgentLoop(
+        val assistant = Assistant(
             client = client,
             device = AndroidDevice(service),
+            store = routines,
             config = AgentConfig(
                 model = settings.model,
                 safetyGate = SafetyGate(confirmEverything = settings.confirmEverything),
@@ -86,8 +92,16 @@ class AgentSession(private val service: AgentAccessibilityService) {
             },
         )
         try {
-            val outcome = loop.run(goal)
-            service.overlay.setStatus(if (outcome.success) "Done" else "Could not finish")
+            val result = assistant.run(goal)
+            val outcome = result.outcome
+            service.overlay.setStatus(
+                when {
+                    !outcome.success -> "Could not finish"
+                    result.replayed && !result.usedAi -> "Done (replayed, free)"
+                    result.saved -> "Done and remembered"
+                    else -> "Done"
+                },
+            )
             service.speaker.say(outcome.summary)
         } catch (e: CancellationException) {
             throw e

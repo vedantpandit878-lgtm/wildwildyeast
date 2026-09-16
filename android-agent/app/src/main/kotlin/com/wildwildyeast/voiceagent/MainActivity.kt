@@ -62,6 +62,11 @@ class MainActivity : AppCompatActivity() {
                 }
             }
         }
+        findViewById<Button>(R.id.btnForget).setOnClickListener {
+            AgentAccessibilityService.instance?.session?.routines?.clear()
+            Toast.makeText(this, "Saved routines cleared", Toast.LENGTH_SHORT).show()
+            refreshStatus()
+        }
         findViewById<Button>(R.id.btnVoice).setOnClickListener {
             val service = AgentAccessibilityService.instance
             if (service == null) {
