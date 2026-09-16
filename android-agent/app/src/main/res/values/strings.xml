@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Voice Agent</string>
+    <string name="accessibility_service_description">Lets Voice Agent read the screen and tap, type and scroll on your behalf when you give it a spoken instruction. Nothing happens unless you tap the microphone bubble.</string>
+</resources>

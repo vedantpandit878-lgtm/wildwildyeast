@@ -168,3 +168,9 @@ UPDATE admins SET password_hash = '<new_hash>' WHERE username = 'admin';
 - Customer auth is flat-number only — no passwords, no OTP. Friction is the enemy.
 - Admin JWT tokens expire after 7 days.
 - The `VITE_API_URL` environment variable overrides the default `http://localhost:3001/api` in both frontends — useful for deploying to a staging server.
+
+---
+
+## Voice Agent (Android)
+
+A separate experiment lives in [`android-agent/`](android-agent/README.md): a voice-controlled phone agent that reads the screen and acts on spoken instructions using Claude. It is independent of the bakery app.
