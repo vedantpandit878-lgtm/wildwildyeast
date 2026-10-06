@@ -44,17 +44,21 @@ data class RoutineStep(
     val key: String? = null,
     val appName: String? = null,
     val seconds: Double? = null,
+    /** When set, the text or label comes from this slot of the spoken command. */
+    val slot: Int? = null,
 ) {
     fun describe(): String = when (kind) {
-        StepKind.TAP -> "tap \"${target?.label()}\""
-        StepKind.LONG_PRESS -> "long-press \"${target?.label()}\""
+        StepKind.TAP -> "tap \"${target?.label()}\"" + slotNote()
+        StepKind.LONG_PRESS -> "long-press \"${target?.label()}\"" + slotNote()
         StepKind.TAP_AT -> "tap at ($x, $y)"
-        StepKind.TYPE_TEXT -> "type \"$text\""
+        StepKind.TYPE_TEXT -> "type \"$text\"" + slotNote()
         StepKind.SCROLL -> "scroll ${direction?.lowercase()}"
         StepKind.PRESS -> "press ${key?.lowercase()}"
         StepKind.OPEN_APP -> "open $appName"
         StepKind.WAIT -> "wait ${seconds}s"
     }
+
+    private fun slotNote() = slot?.let { " (from slot $it)" } ?: ""
 }
 
 /** A spoken command and the steps that completed it last time. */
@@ -65,6 +69,8 @@ data class Routine(
     val summary: String,
     val createdAt: Long,
     val runs: Int = 0,
+    /** Command pattern with {sN} placeholders, when parts of the command were typed or tapped. */
+    val template: String? = null,
 ) {
     companion object {
         /** Lower-case, no punctuation, no filler words, single spaces. */

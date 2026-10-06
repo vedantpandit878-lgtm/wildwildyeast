@@ -8,7 +8,10 @@ import com.wildwildyeast.voiceagent.core.AgentAction
 import com.wildwildyeast.voiceagent.core.AgentConfig
 import com.wildwildyeast.voiceagent.core.AgentListener
 import com.wildwildyeast.voiceagent.core.Assistant
+import com.wildwildyeast.voiceagent.core.Brain
+import com.wildwildyeast.voiceagent.core.ClaudeBrain
 import com.wildwildyeast.voiceagent.core.JsonFileRoutineStore
+import com.wildwildyeast.voiceagent.core.LocalBrain
 import com.wildwildyeast.voiceagent.core.SafetyGate
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
@@ -62,27 +65,43 @@ class AgentSession(private val service: AgentAccessibilityService) {
         if (running && !silent) service.scope.launch { service.speaker.say("Stopped.") }
     }
 
+    /** Pick the planner from settings: on-device Gemini Nano, or Claude when chosen or when Nano is unavailable. */
+    private suspend fun chooseBrain(settings: Settings, config: AgentConfig): (() -> Brain)? {
+        val key = settings.apiKey
+        val claude: (() -> Brain)? = if (key.isBlank()) null else {
+            val client = AnthropicOkHttpClient.builder().apiKey(key).timeout(Duration.ofMinutes(5)).build()
+            ({ ClaudeBrain(client, config) })
+        }
+        if (settings.brain == Settings.BRAIN_CLAUDE) {
+            if (claude == null) {
+                service.overlay.setStatus("Add your API key in the app, or switch to on-device AI")
+                service.speaker.say("Please add your API key in the Voice Agent app, or switch to the on-device brain.")
+            }
+            return claude
+        }
+        if (service.nano.isReady()) return { LocalBrain(service.nano) }
+        if (claude != null) {
+            service.speaker.say("The on-device model is not ready, using Claude instead.")
+            return claude
+        }
+        service.overlay.setStatus("On-device AI is ${service.nano.describe(service.nano.status())}. Open the app to download it.")
+        service.speaker.say("The on-device AI is not ready yet. Please open the Voice Agent app and download it.")
+        return null
+    }
+
     private suspend fun runGoalInternal(goal: String) {
         val settings = Settings(service)
-        val key = settings.apiKey
-        if (key.isBlank()) {
-            service.overlay.setStatus("Set your API key in the Voice Agent app")
-            service.speaker.say("Please set your API key in the Voice Agent app first.")
-            return
-        }
         service.overlay.setStatus("Heard: $goal")
-        val client = AnthropicOkHttpClient.builder()
-            .apiKey(key)
-            .timeout(Duration.ofMinutes(5))
-            .build()
+        val config = AgentConfig(
+            model = settings.model,
+            safetyGate = SafetyGate(confirmEverything = settings.confirmEverything),
+        )
+        val newBrain = chooseBrain(settings, config) ?: return
         val assistant = Assistant(
-            client = client,
+            newBrain = newBrain,
             device = AndroidDevice(service),
             store = routines,
-            config = AgentConfig(
-                model = settings.model,
-                safetyGate = SafetyGate(confirmEverything = settings.confirmEverything),
-            ),
+            config = config,
             listener = object : AgentListener {
                 override fun onStatus(text: String) = service.overlay.setStatus(text)
                 override fun onAction(step: Int, action: AgentAction) {

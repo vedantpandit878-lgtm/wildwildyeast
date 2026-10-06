@@ -29,9 +29,12 @@ It is built for testing on your own device. It is not a Play Store app.
 
 * **Learn once, replay for free.** The first time you say a command the AI
   works it out and every successful step is recorded with a description of the
-  element it touched (label, id, position, app). The next time you say the same
-  or a similar command, `RoutineReplayer` re-finds each element on the live
-  screen and performs the steps with no API calls. If an element cannot be
+  element it touched (label, id, position, app). Words of the command that were
+  typed or tapped become slots: "message Mum I'm leaving" is stored as the
+  pattern "message {name} {text}", so "message Dad I'll be late" replays the
+  same taps with the new name and text (`Slots.kt`). The next time you say a
+  matching command, `RoutineReplayer` re-finds each element on the live
+  screen and performs the steps with no AI at all. If an element cannot be
   found (the app changed, a pop-up appeared), the AI takes over from that
   point and the corrected routine is saved. Risky taps still go through the
   confirmation gate during replay. Routines are stored in the app's private
@@ -43,10 +46,20 @@ It is built for testing on your own device. It is not a Play Store app.
   swipe, screenshot, launch apps), the floating bubble and question panel,
   speech in/out, and a small setup screen.
 
-The model is Claude Opus 5 by default, with an automatic server-side fallback
-to Claude Opus 4.8 if a request is refused. Adaptive thinking is on. Only the
-accessibility tree is sent each step; screenshots are sent only when the model
-asks for one or when the tree is nearly empty (web views, maps, games).
+Two interchangeable brains:
+
+* **On-device Gemini Nano** (default). Runs on the phone through Android's
+  AICore service via the ML Kit GenAI Prompt API. Free, offline, nothing
+  leaves the device. Needs a recent Pixel or Samsung phone; the setup screen
+  shows whether it is supported and downloads the model once. It is a small
+  model, so it handles short tasks well and long multi-step tasks less
+  reliably; it does not look at screenshots, only the element list.
+* **Claude Opus 5** via the Anthropic API, with an automatic fallback to Claude
+  Opus 4.8 if a request is refused. Much more capable; costs per use. Only the
+  accessibility tree is sent each step; screenshots are sent only when the
+  model asks for one or when the tree is nearly empty.
+
+Whichever brain runs, successful tasks become routines that replay for free.
 
 ## Get the app without installing anything on a computer
 
@@ -76,8 +89,10 @@ Every change pushed to GitHub builds the app automatically (see
       apps > Voice Agent). Android will warn you that the app can read the
       screen and perform actions. That is the point.
    2. Grant microphone and notification permissions.
-   3. Paste your Anthropic API key and tap **Save key**. It is stored in the
-      app's private storage on the phone only.
+   3. Choose the brain. On-device is the default; if the status line says
+      "not downloaded yet", tap **Download on-device AI** and wait (it is a
+      one-time download over Wi-Fi). If you prefer Claude, pick it and paste
+      your Anthropic API key; it is stored in the app's private storage only.
 2. A microphone bubble now floats over every app. Drag it anywhere. Tap it,
    speak, and watch. Tap it again to stop at any time.
 
@@ -96,14 +111,12 @@ without speaking.
 
 * **Speed.** Each step is one round trip to Claude, typically 3 to 8 seconds.
   A ride booking with a dozen screens takes about a minute.
-* **Cost.** Roughly 10 to 60 cents the first time a task runs at Opus 5
-  pricing, depending on length. Repeats of the same command are free while the
-  replay succeeds. The system prompt is cached; screenshots are the expensive
-  part.
-* **Replay limits.** A routine replays the exact text it typed the first time,
-  so "message Mum I'm leaving" replays that same message. Say something new
-  and it becomes a new routine. Commands whose steps depend on live content
-  (choosing the cheapest ride) may still need the AI on some runs.
+* **Cost.** Nothing with the on-device brain. With Claude, roughly 10 to 60
+  cents the first time a task runs, depending on length. Repeats of a learned
+  command are free either way.
+* **Replay limits.** Slots cover text you dictate and names you pick. Commands
+  whose steps depend on live content (choosing the cheapest ride) may still
+  need the brain on some runs.
 * **Confirmation.** Two layers. The system prompt tells Claude to ask before
   irreversible actions. Independently, `SafetyGate` in the app intercepts taps
   on elements labelled Send, Pay, Confirm, Book, Order, Delete, Post and so on
@@ -138,6 +151,7 @@ android-agent/
 ├── core/src/test/...         unit tests (run anywhere)
 └── app/src/main/kotlin/com/wildwildyeast/voiceagent/
     ├── AgentAccessibilityService.kt  read tree, tap, type, swipe, screenshot, open app
+    ├── NanoModel.kt                  Gemini Nano through the ML Kit Prompt API
     ├── AndroidDevice.kt              DeviceController on top of the service
     ├── OverlayController.kt          floating bubble + question panel
     ├── VoiceInput.kt / Speaker.kt    speech recognition / text to speech

@@ -14,7 +14,17 @@ class Settings(context: Context) {
         get() = prefs.getBoolean("confirm_everything", false)
         set(value) = prefs.edit().putBoolean("confirm_everything", value).apply()
 
+    /** "local" for on-device Gemini Nano, "claude" for the cloud model. */
+    var brain: String
+        get() = prefs.getString("brain", BRAIN_LOCAL) ?: BRAIN_LOCAL
+        set(value) = prefs.edit().putString("brain", value).apply()
+
     var model: String
         get() = prefs.getString("model", "claude-opus-5") ?: "claude-opus-5"
         set(value) = prefs.edit().putString("model", value.trim()).apply()
+
+    companion object {
+        const val BRAIN_LOCAL = "local"
+        const val BRAIN_CLAUDE = "claude"
+    }
 }

@@ -23,9 +23,10 @@ class RoutineReplayer(
     /** How long to wait for an expected element or app to appear. */
     private val findTimeoutMs: Long = 6000,
 ) {
-    suspend fun replay(routine: Routine): ReplayResult {
-        val total = routine.steps.size
-        routine.steps.forEachIndexed { index, step ->
+    suspend fun replay(routine: Routine, slots: Map<Int, String> = emptyMap()): ReplayResult {
+        val steps = routine.steps.map { Slots.apply(it, slots) }
+        val total = steps.size
+        steps.forEachIndexed { index, step ->
             currentCoroutineContext().ensureActive()
             listener.onStatus("Replaying ${index + 1}/$total: ${step.describe()}")
             val resolved = resolve(step)

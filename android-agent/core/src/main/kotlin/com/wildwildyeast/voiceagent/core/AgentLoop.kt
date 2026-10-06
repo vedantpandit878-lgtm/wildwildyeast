@@ -1,27 +1,11 @@
 package com.wildwildyeast.voiceagent.core
 
-import com.anthropic.client.AnthropicClient
-import com.anthropic.models.beta.AnthropicBeta
-import com.anthropic.models.beta.messages.BetaBase64ImageSource
-import com.anthropic.models.beta.messages.BetaCacheControlEphemeral
-import com.anthropic.models.beta.messages.BetaContentBlockParam
-import com.anthropic.models.beta.messages.BetaFallbackParam
-import com.anthropic.models.beta.messages.BetaImageBlockParam
-import com.anthropic.models.beta.messages.BetaMessage
-import com.anthropic.models.beta.messages.BetaMessageParam
-import com.anthropic.models.beta.messages.BetaStopReason
-import com.anthropic.models.beta.messages.BetaTextBlockParam
-import com.anthropic.models.beta.messages.BetaToolResultBlockParam
-import com.anthropic.models.beta.messages.BetaToolUseBlock
-import com.anthropic.models.beta.messages.MessageCreateParams
 import com.anthropic.models.messages.Model
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
-import kotlinx.coroutines.withContext
-import java.util.Base64
 
 data class AgentConfig(
+    /** Claude model id (used by [ClaudeBrain]). */
     val model: String = "claude-opus-5",
     /** Model the API falls back to if the primary refuses. Null disables fallbacks. */
     val fallbackModel: Model? = Model.CLAUDE_OPUS_4_8,
@@ -44,73 +28,58 @@ interface AgentListener {
 }
 
 /**
- * The plan -> act -> observe loop. Each turn sends the goal, the history and the
- * current screen to Claude; Claude answers with one tool call; the device runs
- * it and the new screen comes back as the tool result. History is append-only.
+ * The plan -> act -> observe loop, independent of which brain does the planning.
+ * Each turn the brain asks for actions; the device runs them; the new screen
+ * goes back as an observation.
  */
 class AgentLoop(
-    private val client: AnthropicClient,
+    private val brain: Brain,
     private val device: DeviceController,
     private val config: AgentConfig = AgentConfig(),
     private val listener: AgentListener = object : AgentListener {},
 ) {
     /**
      * @param context optional note about what already happened before the loop
-     *   started (for example steps a saved routine replayed) so the model
+     *   started (for example steps a saved routine replayed) so the brain
      *   continues from the current screen instead of starting over.
      */
     suspend fun run(goal: String, context: String? = null): AgentOutcome {
-        val history = mutableListOf<BetaMessageParam>()
         listener.onStatus("Reading screen")
         val first = device.capture(withScreenshot = false)
-        history += userMessage(initialPrompt(goal, first, context), first.screenshotPng)
+        brain.begin(goal, context, device.installedAppNames(), first)
 
         var step = 0
-        var consecutiveFailures = 0
+        var nudges = 0
         while (step < config.maxSteps) {
             currentCoroutineContext().ensureActive()
             step++
             listener.onStatus("Thinking (step $step)")
-            val response = callModel(history)
-            history += BetaMessageParam.builder()
-                .role(BetaMessageParam.Role.ASSISTANT)
-                .contentOfBetaContentBlockParams(response.content().map { it.toParam() })
-                .build()
+            val turn = brain.next()
+            turn.text?.let { listener.onModelText(it) }
+            turn.refusal?.let { return AgentOutcome(false, it, step) }
 
-            response.content().forEach { block -> block.text().ifPresent { listener.onModelText(it.text()) } }
-
-            val stop = response.stopReason().orElse(null)
-            if (stop == BetaStopReason.REFUSAL) {
-                val why = response.stopDetails().map { it.toString() }.orElse("")
-                return AgentOutcome(false, "I can't help with that request. $why".trim(), step)
-            }
-            val toolUses = response.content().mapNotNull { it.toolUse().orElse(null) }
-            if (toolUses.isEmpty()) {
-                if (stop == BetaStopReason.MAX_TOKENS) {
-                    history += userMessage("Your reply was cut off. Continue by calling exactly one tool.", null)
+            if (turn.actions.isEmpty()) {
+                if (turn.truncated) {
+                    brain.report(listOf(Observation("Your reply was cut off. Continue with exactly one action.")))
                     continue
                 }
-                val text = response.content().mapNotNull { it.text().orElse(null)?.text() }.joinToString(" ").trim()
-                // The model stopped without calling finish: nudge once, then accept its text.
-                if (consecutiveFailures == 0) {
-                    consecutiveFailures++
-                    history += userMessage("Please continue using the tools. When the task is complete or impossible, call finish.", null)
+                if (nudges++ == 0) {
+                    brain.report(listOf(Observation("Please continue using the actions. When the task is complete or impossible, use finish.")))
                     continue
                 }
-                return AgentOutcome(false, text.ifBlank { "I stopped without finishing the task." }, step)
+                return AgentOutcome(false, turn.text?.ifBlank { null } ?: "I stopped without finishing the task.", step)
             }
-            consecutiveFailures = 0
+            nudges = 0
 
-            val results = mutableListOf<BetaContentBlockParam>()
+            val observations = mutableListOf<Observation>()
             var outcome: AgentOutcome? = null
-            for (toolUse in toolUses) {
+            for (request in turn.actions) {
                 if (outcome != null) {
-                    results += toolResult(toolUse.id(), "Skipped: task already finished.", null)
+                    observations += Observation("Skipped: task already finished.")
                     continue
                 }
-                val parsed = AgentTools.parse(toolUse.name(), toolUse._input())
-                val action = parsed.getOrElse { err ->
-                    results += toolResult(toolUse.id(), "Invalid tool call: ${err.message}", null, isError = true)
+                val action = request.getOrElse { err ->
+                    observations += Observation("Invalid action: ${err.message}", isError = true)
                     continue
                 }
                 listener.onAction(step, action)
@@ -119,24 +88,19 @@ class AgentLoop(
                     is AgentAction.AskUser -> {
                         listener.onStatus("Waiting for you")
                         val answer = device.askUser(action.question)
-                        results += toolResult(toolUse.id(), "User answered: \"$answer\"", null)
+                        observations += Observation("User answered: \"$answer\"")
                     }
                     is AgentAction.Screenshot -> {
-                        val screen = device.capture(withScreenshot = true)
-                        results += toolResult(toolUse.id(), "Screenshot attached.\n" + screen.toPromptText(), screen.screenshotPng)
+                        val screen = device.capture(withScreenshot = brain.acceptsImages)
+                        observations += Observation(if (brain.acceptsImages) "Screenshot attached." else "Screenshots are not available; use the element list.", screen, screen.screenshotPng)
                     }
                     else -> {
                         val before = device.capture(withScreenshot = false)
                         val question = config.safetyGate.confirmationFor(action, before)
                         if (question != null) {
                             listener.onStatus("Waiting for your confirmation")
-                            val approved = device.confirm(question)
-                            if (!approved) {
-                                results += toolResult(
-                                    toolUse.id(),
-                                    "The user declined this action. Do not retry it. Ask the user what to do instead, or call finish.",
-                                    null,
-                                )
+                            if (!device.confirm(question)) {
+                                observations += Observation("The user declined this action. Do not retry it. Ask the user what to do instead, or finish.")
                                 continue
                             }
                         }
@@ -144,92 +108,22 @@ class AgentLoop(
                         val result = device.perform(action)
                         if (result.ok) listener.onStepPerformed(action, before, result)
                         var after = device.capture(withScreenshot = false)
-                        if (after.nodes.size < config.autoScreenshotBelowNodes) {
-                            // Tree is too thin to act on (web view, map, game): give the model pixels.
+                        if (brain.acceptsImages && after.nodes.size < config.autoScreenshotBelowNodes) {
+                            // Tree is too thin to act on (web view, map, game): give the brain pixels.
                             after = device.capture(withScreenshot = true)
                         }
-                        val body = buildString {
-                            append(if (result.ok) "Action done: " else "Action FAILED: ")
-                            append(result.message).append('\n')
-                            append("Screen after the action:\n")
-                            append(after.toPromptText())
-                        }
-                        results += toolResult(toolUse.id(), body, after.screenshotPng, isError = !result.ok)
+                        observations += Observation(
+                            (if (result.ok) "Action done: " else "Action FAILED: ") + result.message,
+                            after, after.screenshotPng, isError = !result.ok,
+                        )
                     }
                 }
             }
-            if (results.isNotEmpty()) {
-                history += BetaMessageParam.builder()
-                    .role(BetaMessageParam.Role.USER)
-                    .contentOfBetaContentBlockParams(results)
-                    .build()
-            }
+            if (observations.isNotEmpty()) brain.report(observations)
             outcome?.let { return it }
         }
         return AgentOutcome(false, "I stopped after ${config.maxSteps} steps without finishing. Please try a smaller task.", step)
     }
-
-    private suspend fun callModel(history: List<BetaMessageParam>): BetaMessage = withContext(Dispatchers.IO) {
-        val builder = MessageCreateParams.builder()
-            .model(config.model)
-            .maxTokens(config.maxTokens)
-            .systemOfBetaTextBlockParams(
-                listOf(
-                    BetaTextBlockParam.builder()
-                        .text(SYSTEM_PROMPT)
-                        .cacheControl(BetaCacheControlEphemeral.builder().build())
-                        .build(),
-                ),
-            )
-            .messages(history)
-        AgentTools.definitions().forEach { builder.addTool(it) }
-        config.fallbackModel?.let { fb ->
-            builder
-                .fallbacksOfFallbackParams(listOf(BetaFallbackParam.builder().model(fb).build()))
-                .addBeta(AnthropicBeta.SERVER_SIDE_FALLBACK_2026_07_01)
-        }
-        client.beta().messages().create(builder.build())
-    }
-
-    private fun initialPrompt(goal: String, screen: ScreenState, context: String?): String = buildString {
-        append("Task from the user (spoken): \"").append(goal).append("\"\n\n")
-        context?.takeIf { it.isNotBlank() }?.let { append(it.trim()).append("\n\n") }
-        val apps = device.installedAppNames()
-        if (apps.isNotEmpty()) {
-            append("Launchable apps on this phone: ").append(apps.take(200).joinToString(", ")).append("\n\n")
-        }
-        append("Current screen:\n").append(screen.toPromptText())
-    }
-
-    private fun userMessage(text: String, png: ByteArray?): BetaMessageParam {
-        val blocks = mutableListOf<BetaContentBlockParam>(
-            BetaContentBlockParam.ofText(BetaTextBlockParam.builder().text(text).build()),
-        )
-        png?.let { blocks += BetaContentBlockParam.ofImage(imageBlock(it)) }
-        return BetaMessageParam.builder().role(BetaMessageParam.Role.USER).contentOfBetaContentBlockParams(blocks).build()
-    }
-
-    private fun toolResult(toolUseId: String, text: String, png: ByteArray?, isError: Boolean = false): BetaContentBlockParam {
-        val blocks = mutableListOf(
-            BetaToolResultBlockParam.Content.Block.ofText(BetaTextBlockParam.builder().text(text).build()),
-        )
-        png?.let { blocks += BetaToolResultBlockParam.Content.Block.ofImage(imageBlock(it)) }
-        val builder = BetaToolResultBlockParam.builder()
-            .toolUseId(toolUseId)
-            .contentOfBlocks(blocks)
-        if (isError) builder.isError(true)
-        return BetaContentBlockParam.ofToolResult(builder.build())
-    }
-
-    private fun imageBlock(png: ByteArray): BetaImageBlockParam =
-        BetaImageBlockParam.builder()
-            .source(
-                BetaBase64ImageSource.builder()
-                    .mediaType(BetaBase64ImageSource.MediaType.IMAGE_PNG)
-                    .data(Base64.getEncoder().encodeToString(png))
-                    .build(),
-            )
-            .build()
 
     companion object {
         val SYSTEM_PROMPT = """

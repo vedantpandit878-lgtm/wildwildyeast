@@ -8,17 +8,28 @@ import android.provider.Settings as SystemSettings
 import android.widget.Button
 import android.widget.CheckBox
 import android.widget.EditText
+import android.widget.RadioButton
 import android.widget.TextView
 import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
+import kotlinx.coroutines.launch
 
 /** Setup screen: permissions, API key, and a way to test commands by typing. */
 class MainActivity : AppCompatActivity() {
 
     private lateinit var settings: Settings
     private lateinit var status: TextView
+    private lateinit var nanoStatus: TextView
+    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
+    private val nano by lazy { NanoModel(applicationContext) }
+    private var downloadJob: Job? = null
 
     private val permissionLauncher =
         registerForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { refreshStatus() }
@@ -28,6 +39,22 @@ class MainActivity : AppCompatActivity() {
         setContentView(R.layout.activity_main)
         settings = Settings(this)
         status = findViewById(R.id.status)
+        nanoStatus = findViewById(R.id.nanoStatus)
+
+        val brainLocal = findViewById<RadioButton>(R.id.brainLocal)
+        val brainClaude = findViewById<RadioButton>(R.id.brainClaude)
+        if (settings.brain == Settings.BRAIN_CLAUDE) brainClaude.isChecked = true else brainLocal.isChecked = true
+        brainLocal.setOnCheckedChangeListener { _, checked -> if (checked) settings.brain = Settings.BRAIN_LOCAL }
+        brainClaude.setOnCheckedChangeListener { _, checked -> if (checked) settings.brain = Settings.BRAIN_CLAUDE }
+
+        findViewById<Button>(R.id.btnDownloadNano).setOnClickListener {
+            if (downloadJob?.isActive == true) return@setOnClickListener
+            downloadJob = scope.launch {
+                nanoStatus.text = "On-device AI: starting download (this can take a while on Wi-Fi)"
+                nano.download { progress -> nanoStatus.text = "On-device AI: $progress" }
+                refreshNanoStatus()
+            }
+        }
 
         findViewById<Button>(R.id.btnAccessibility).setOnClickListener {
             startActivity(Intent(SystemSettings.ACTION_ACCESSIBILITY_SETTINGS))
@@ -83,6 +110,19 @@ class MainActivity : AppCompatActivity() {
         // We are in the foreground now, so the service is allowed to become a microphone foreground service.
         AgentAccessibilityService.instance?.ensureForeground()
         refreshStatus()
+        scope.launch { refreshNanoStatus() }
+    }
+
+    override fun onDestroy() {
+        scope.cancel()
+        nano.close()
+        super.onDestroy()
+    }
+
+    private suspend fun refreshNanoStatus() {
+        val s = nano.status()
+        nanoStatus.text = "On-device AI: " + nano.describe(s) +
+            if (s == com.google.mlkit.genai.prompt.FeatureStatus.DOWNLOADABLE) ". Tap the button below to download it." else ""
     }
 
     private fun refreshStatus() {

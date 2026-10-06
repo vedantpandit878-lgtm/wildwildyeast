@@ -53,6 +53,8 @@ class AgentAccessibilityService : AccessibilityService() {
         private set
     lateinit var session: AgentSession
         private set
+    lateinit var nano: NanoModel
+        private set
 
     @Volatile
     var lastEventUptime: Long = 0L
@@ -65,6 +67,7 @@ class AgentAccessibilityService : AccessibilityService() {
         super.onServiceConnected()
         instance = this
         speaker = Speaker(this)
+        nano = NanoModel(this)
         overlay = OverlayController(this)
         session = AgentSession(this)
         overlay.show()
@@ -83,6 +86,7 @@ class AgentAccessibilityService : AccessibilityService() {
         if (::session.isInitialized) session.stop(silent = true)
         if (::overlay.isInitialized) overlay.hide()
         if (::speaker.isInitialized) speaker.shutdown()
+        if (::nano.isInitialized) nano.close()
         scope.cancel()
         super.onDestroy()
     }

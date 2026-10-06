@@ -41,7 +41,44 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginTop="16dp"
-            android:text="3. Anthropic API key" />
+            android:text="3. Choose the brain" />
+
+        <RadioGroup
+            android:id="@+id/brainGroup"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content">
+
+            <RadioButton
+                android:id="@+id/brainLocal"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="On-device Gemini Nano: free, private, works offline" />
+
+            <RadioButton
+                android:id="@+id/brainClaude"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="Claude in the cloud: smarter, needs an API key, costs per use" />
+        </RadioGroup>
+
+        <TextView
+            android:id="@+id/nanoStatus"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="4dp"
+            android:text="On-device AI: checking..." />
+
+        <Button
+            android:id="@+id/btnDownloadNano"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Download on-device AI" />
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="16dp"
+            android:text="Claude API key (only for the cloud brain)" />
 
         <EditText
             android:id="@+id/apiKey"

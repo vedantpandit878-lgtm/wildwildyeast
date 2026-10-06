@@ -38,7 +38,7 @@ class RoutineTest {
         val store = JsonFileRoutineStore(file)
         val routine = Routine("Open Gmail", Routine.normalize("Open Gmail"), listOf(RoutineStep(StepKind.OPEN_APP, appName = "Gmail")), "Opened Gmail.", 1L)
         store.save(routine)
-        assertNotNull(store.find("open gmail please"))
+        assertNotNull(store.find("open gmail please")?.routine)
         assertNull(store.find("open whatsapp"))
         val reloaded = JsonFileRoutineStore(file)
         assertEquals(routine, reloaded.all().single())

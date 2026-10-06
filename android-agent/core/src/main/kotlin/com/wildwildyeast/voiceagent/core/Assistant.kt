@@ -1,14 +1,12 @@
 package com.wildwildyeast.voiceagent.core
 
-import com.anthropic.client.AnthropicClient
-
 /**
  * Front door for a spoken command. Replays a learned routine when one matches,
- * otherwise (or when the replay gets stuck) runs the AI loop, and saves what
- * worked so the next time is free.
+ * otherwise (or when the replay gets stuck) runs the AI loop with a fresh
+ * brain, and saves what worked so the next time is free.
  */
 class Assistant(
-    private val client: AnthropicClient,
+    private val newBrain: () -> Brain,
     private val device: DeviceController,
     private val store: RoutineStore,
     private val config: AgentConfig = AgentConfig(),
@@ -17,7 +15,8 @@ class Assistant(
     data class Result(val outcome: AgentOutcome, val replayed: Boolean, val usedAi: Boolean, val saved: Boolean)
 
     suspend fun run(command: String): Result {
-        val routine = store.find(command)
+        val match = store.find(command)
+        val routine = match?.routine
         val recorder = RoutineRecorder()
         val recording = object : AgentListener by listener {
             override fun onStepPerformed(action: AgentAction, before: ScreenState, result: ActionResult) {
@@ -31,7 +30,7 @@ class Assistant(
         var context: String? = null
         if (routine != null) {
             listener.onStatus("Replaying what worked last time")
-            val replay = RoutineReplayer(device, config.safetyGate, recording).replay(routine)
+            val replay = RoutineReplayer(device, config.safetyGate, recording).replay(routine, match.slots)
             if (replay.finished) {
                 store.save(routine.copy(runs = routine.runs + 1))
                 return Result(AgentOutcome(true, routine.summary, replay.completedSteps), replayed = true, usedAi = false, saved = false)
@@ -49,16 +48,20 @@ class Assistant(
             listener.onStatus("Routine stuck, asking the AI")
         }
 
-        val outcome = AgentLoop(client, device, config, recording).run(command, context)
+        val outcome = AgentLoop(newBrain(), device, config, recording).run(command, context)
         var saved = false
         if (outcome.success && recorder.steps.isNotEmpty()) {
+            val (template, steps) = Slots.parameterize(command, recorder.steps)
+            // The corrected run supersedes the routine that got stuck.
+            routine?.let { store.delete(it.normalized) }
             store.save(
                 Routine(
                     command = command,
                     normalized = Routine.normalize(command),
-                    steps = recorder.steps,
+                    steps = steps,
                     summary = outcome.summary,
                     createdAt = System.currentTimeMillis(),
+                    template = template,
                 ),
             )
             saved = true

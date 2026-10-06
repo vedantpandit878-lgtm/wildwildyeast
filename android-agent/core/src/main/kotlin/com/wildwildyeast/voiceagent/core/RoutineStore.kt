@@ -6,6 +6,9 @@ import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
 import com.fasterxml.jackson.module.kotlin.readValue
 import java.io.File
 
+/** A routine that fits a spoken command, with the values for its slots. */
+data class RoutineMatch(val routine: Routine, val slots: Map<Int, String> = emptyMap())
+
 /** Persistence for learned routines. */
 interface RoutineStore {
     fun all(): List<Routine>
@@ -13,17 +16,25 @@ interface RoutineStore {
     fun delete(normalized: String)
     fun clear()
 
-    /** Best match for a spoken command, or null. Exact normalized match wins; otherwise high token overlap. */
-    fun find(command: String, minSimilarity: Double = 0.8): Routine? {
+    /**
+     * Best match for a spoken command, or null. A template match wins (it carries
+     * the new slot values), then an exact normalized match, then high token
+     * overlap among routines without slots.
+     */
+    fun find(command: String, minSimilarity: Double = 0.8): RoutineMatch? {
         val n = Routine.normalize(command)
         if (n.isBlank()) return null
         val routines = all()
-        routines.firstOrNull { it.normalized == n }?.let { return it }
+        routines.filter { it.template != null }
+            .sortedByDescending { it.template!!.count { c -> c == ' ' } }
+            .forEach { r -> Slots.match(r.template!!, command)?.let { return RoutineMatch(r, it) } }
+        routines.firstOrNull { it.template == null && it.normalized == n }?.let { return RoutineMatch(it) }
         return routines
+            .filter { it.template == null }
             .map { it to Routine.similarity(n, it.normalized) }
             .filter { it.second >= minSimilarity }
             .maxByOrNull { it.second }
-            ?.first
+            ?.let { RoutineMatch(it.first) }
     }
 }
 

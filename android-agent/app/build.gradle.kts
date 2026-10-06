@@ -54,4 +54,6 @@ dependencies {
     implementation("androidx.appcompat:appcompat:1.7.1")
     implementation("androidx.core:core-ktx:1.16.0")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.11.0")
+    // On-device Gemini Nano through Android's AICore (ML Kit GenAI Prompt API).
+    implementation("com.google.mlkit:genai-prompt:1.0.0-beta4")
 }
