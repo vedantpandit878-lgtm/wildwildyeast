@@ -2,8 +2,7 @@ package com.wildwildyeast.voiceagent
 
 import android.content.Context
 import android.util.Log
-import com.google.mlkit.genai.prompt.DownloadStatus
-import com.google.mlkit.genai.prompt.FeatureStatus
+import com.google.mlkit.genai.common.FeatureStatus
 import com.google.mlkit.genai.prompt.Generation
 import com.google.mlkit.genai.prompt.SystemInstruction
 import com.google.mlkit.genai.prompt.TextPart
@@ -41,22 +40,20 @@ class NanoModel(@Suppress("unused") private val context: Context) : LocalTextMod
         else -> "not supported on this phone"
     }
 
-    /** Download the model through AICore. Reports progress text; returns true when complete. */
+    /** Download the model through AICore. Reports progress text; returns true when the model is available afterwards. */
     suspend fun download(onProgress: (String) -> Unit): Boolean {
-        var ok = false
         try {
             model.download().collect { status ->
-                when (status) {
-                    is DownloadStatus.DownloadStarted -> onProgress("Download started")
-                    is DownloadStatus.DownloadProgress -> onProgress("Downloaded ${status.totalBytesDownloaded / (1024 * 1024)} MB")
-                    DownloadStatus.DownloadCompleted -> { ok = true; onProgress("Download complete") }
-                    is DownloadStatus.DownloadFailed -> onProgress("Download failed: ${status.e.message}")
-                }
+                // Status objects are DownloadStarted / DownloadProgress / DownloadCompleted / DownloadFailed;
+                // their class names make a readable progress line without depending on each type.
+                val label = status.javaClass.simpleName.removePrefix("Download")
+                val detail = status.toString().substringAfter('(', "").substringBefore(')')
+                onProgress(if (detail.isBlank()) label else "$label ($detail)")
             }
         } catch (e: Exception) {
             onProgress("Download failed: ${e.message}")
         }
-        return ok
+        return isReady()
     }
 
     override suspend fun generate(system: String, prompt: String): String {

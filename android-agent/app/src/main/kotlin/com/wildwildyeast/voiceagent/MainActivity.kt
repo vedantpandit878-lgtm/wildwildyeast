@@ -122,7 +122,7 @@ class MainActivity : AppCompatActivity() {
     private suspend fun refreshNanoStatus() {
         val s = nano.status()
         nanoStatus.text = "On-device AI: " + nano.describe(s) +
-            if (s == com.google.mlkit.genai.prompt.FeatureStatus.DOWNLOADABLE) ". Tap the button below to download it." else ""
+            if (s == com.google.mlkit.genai.common.FeatureStatus.DOWNLOADABLE) ". Tap the button below to download it." else ""
     }
 
     private fun refreshStatus() {
