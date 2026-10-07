@@ -144,7 +144,7 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginTop="20dp"
-            android:text="Once the service is enabled a small microphone bubble floats over every app. Tap it, speak, and watch. Tap it again to stop the agent at any time. The agent asks for confirmation before sending, paying, booking or deleting anything.\n\nBasics run instantly with no AI: call or text someone, WhatsApp a message, open an app, set an alarm or timer, remind me, navigate somewhere, play music, search the web, flashlight, volume, wifi, bluetooth, calendar, camera, time, date, battery, read the screen, lock, screenshot. Say \"what can you do\" to hear the list.\n\nAnything else is worked out on screen the first time, remembered, and replayed instantly after that."
+            android:text="Once the service is enabled a small microphone bubble floats over every app. Tap it, speak, and watch. Tap it again to stop the agent at any time. The agent asks for confirmation before sending, paying, booking or deleting anything.\n\nBasics run instantly with no AI: call or text someone, WhatsApp a message, open an app, set an alarm or timer, remind me, navigate somewhere, play music, search the web, flashlight, volume, wifi, bluetooth, calendar, camera, time, date, battery, read the screen, lock, screenshot. Say &quot;what can you do&quot; to hear the list.\n\nAnything else is worked out on screen the first time, remembered, and replayed instantly after that."
             android:textSize="14sp" />
     </LinearLayout>
 </ScrollView>
