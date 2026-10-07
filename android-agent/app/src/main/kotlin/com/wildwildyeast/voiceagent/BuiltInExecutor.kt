@@ -251,8 +251,9 @@ class BuiltInExecutor(private val service: AgentAccessibilityService) : BuiltInH
         val am = service.getSystemService(AudioManager::class.java)
         val stream = AudioManager.STREAM_MUSIC
         val max = am.getStreamMaxVolume(stream)
+        val level = action.level
         when {
-            action.level != null -> am.setStreamVolume(stream, (max * action.level / 100.0).toInt().coerceIn(0, max), AudioManager.FLAG_SHOW_UI)
+            level != null -> am.setStreamVolume(stream, (max * level / 100.0).toInt().coerceIn(0, max), AudioManager.FLAG_SHOW_UI)
             action.delta > 0 -> am.adjustStreamVolume(stream, AudioManager.ADJUST_RAISE, AudioManager.FLAG_SHOW_UI)
             action.delta < 0 -> am.adjustStreamVolume(stream, AudioManager.ADJUST_LOWER, AudioManager.FLAG_SHOW_UI)
             else -> {
@@ -287,8 +288,9 @@ class BuiltInExecutor(private val service: AgentAccessibilityService) : BuiltInH
         if (action.tomorrow) cal.add(Calendar.DAY_OF_YEAR, 1)
         val intent = Intent(Intent.ACTION_INSERT).setData(CalendarContract.Events.CONTENT_URI)
             .putExtra(CalendarContract.Events.TITLE, action.title)
-        if (action.hour != null) {
-            cal.set(Calendar.HOUR_OF_DAY, action.hour)
+        val hour = action.hour
+        if (hour != null) {
+            cal.set(Calendar.HOUR_OF_DAY, hour)
             cal.set(Calendar.MINUTE, action.minute ?: 0)
             cal.set(Calendar.SECOND, 0)
             intent.putExtra(CalendarContract.EXTRA_EVENT_BEGIN_TIME, cal.timeInMillis)
