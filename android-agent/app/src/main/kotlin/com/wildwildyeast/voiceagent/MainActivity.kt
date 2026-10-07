@@ -61,7 +61,12 @@ class MainActivity : AppCompatActivity() {
             Toast.makeText(this, "Find \"Voice Agent\" under installed apps and turn it on", Toast.LENGTH_LONG).show()
         }
         findViewById<Button>(R.id.btnPermissions).setOnClickListener {
-            permissionLauncher.launch(arrayOf(Manifest.permission.RECORD_AUDIO, Manifest.permission.POST_NOTIFICATIONS))
+            permissionLauncher.launch(
+                arrayOf(
+                    Manifest.permission.RECORD_AUDIO, Manifest.permission.POST_NOTIFICATIONS,
+                    Manifest.permission.READ_CONTACTS, Manifest.permission.CALL_PHONE, Manifest.permission.SEND_SMS,
+                ),
+            )
         }
 
         val apiKey = findViewById<EditText>(R.id.apiKey)
@@ -71,6 +76,10 @@ class MainActivity : AppCompatActivity() {
             Toast.makeText(this, "Saved", Toast.LENGTH_SHORT).show()
             refreshStatus()
         }
+
+        val smsDefault = findViewById<CheckBox>(R.id.messageBySms)
+        smsDefault.isChecked = settings.messageBySms
+        smsDefault.setOnCheckedChangeListener { _, checked -> settings.messageBySms = checked }
 
         val confirmAll = findViewById<CheckBox>(R.id.confirmEverything)
         confirmAll.isChecked = settings.confirmEverything
@@ -128,6 +137,8 @@ class MainActivity : AppCompatActivity() {
     private fun refreshStatus() {
         val service = AgentAccessibilityService.instance != null
         val mic = ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED
+        val people = listOf(Manifest.permission.READ_CONTACTS, Manifest.permission.CALL_PHONE, Manifest.permission.SEND_SMS)
+            .all { ContextCompat.checkSelfPermission(this, it) == PackageManager.PERMISSION_GRANTED }
         val key = settings.apiKey.isNotBlank()
         status.text = buildString {
             append(if (service) "✅ Accessibility service is on\n" else "❌ Accessibility service is off\n")

@@ -65,28 +65,25 @@ class AgentSession(private val service: AgentAccessibilityService) {
         if (running && !silent) service.scope.launch { service.speaker.say("Stopped.") }
     }
 
+    /** Thrown when a command needs a brain and none is set up; the message is spoken. */
+    private class NoBrain(message: String) : IllegalStateException(message)
+
     /** Pick the planner from settings: on-device Gemini Nano, or Claude when chosen or when Nano is unavailable. */
-    private suspend fun chooseBrain(settings: Settings, config: AgentConfig): (() -> Brain)? {
+    private suspend fun chooseBrain(settings: Settings, config: AgentConfig): Brain {
         val key = settings.apiKey
         val claude: (() -> Brain)? = if (key.isBlank()) null else {
             val client = AnthropicOkHttpClient.builder().apiKey(key).timeout(Duration.ofMinutes(5)).build()
             ({ ClaudeBrain(client, config) })
         }
         if (settings.brain == Settings.BRAIN_CLAUDE) {
-            if (claude == null) {
-                service.overlay.setStatus("Add your API key in the app, or switch to on-device AI")
-                service.speaker.say("Please add your API key in the Voice Agent app, or switch to the on-device brain.")
-            }
-            return claude
+            return claude?.invoke() ?: throw NoBrain("Please add your API key in the Voice Agent app, or switch to the on-device brain.")
         }
-        if (service.nano.isReady()) return { LocalBrain(service.nano) }
+        if (service.nano.isReady()) return LocalBrain(service.nano)
         if (claude != null) {
             service.speaker.say("The on-device model is not ready, using Claude instead.")
-            return claude
+            return claude()
         }
-        service.overlay.setStatus("On-device AI is ${service.nano.describe(service.nano.status())}. Open the app to download it.")
-        service.speaker.say("The on-device AI is not ready yet. Please open the Voice Agent app and download it.")
-        return null
+        throw NoBrain("The on-device AI is not ready yet. Please open the Voice Agent app and download it.")
     }
 
     private suspend fun runGoalInternal(goal: String) {
@@ -96,12 +93,14 @@ class AgentSession(private val service: AgentAccessibilityService) {
             model = settings.model,
             safetyGate = SafetyGate(confirmEverything = settings.confirmEverything),
         )
-        val newBrain = chooseBrain(settings, config) ?: return
+        // The brain is only built when a command actually needs one; built-ins and replays never do.
+        val newBrain: suspend () -> Brain = { chooseBrain(settings, config) }
         val assistant = Assistant(
             newBrain = newBrain,
             device = AndroidDevice(service),
             store = routines,
             config = config,
+            builtIns = BuiltInExecutor(service),
             listener = object : AgentListener {
                 override fun onStatus(text: String) = service.overlay.setStatus(text)
                 override fun onAction(step: Int, action: AgentAction) {
@@ -116,6 +115,7 @@ class AgentSession(private val service: AgentAccessibilityService) {
             service.overlay.setStatus(
                 when {
                     !outcome.success -> "Could not finish"
+                    result.builtIn -> "Done"
                     result.replayed && !result.usedAi -> "Done (replayed, free)"
                     result.saved -> "Done and remembered"
                     else -> "Done"
@@ -124,6 +124,9 @@ class AgentSession(private val service: AgentAccessibilityService) {
             service.speaker.say(outcome.summary)
         } catch (e: CancellationException) {
             throw e
+        } catch (e: NoBrain) {
+            service.overlay.setStatus(e.message ?: "No brain available")
+            service.speaker.say(e.message ?: "No brain is available.")
         } catch (e: UnauthorizedException) {
             service.overlay.setStatus("API key rejected")
             service.speaker.say("The API key was rejected. Please check it in the app.")

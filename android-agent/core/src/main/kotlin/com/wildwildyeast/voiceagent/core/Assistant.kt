@@ -6,15 +6,29 @@ package com.wildwildyeast.voiceagent.core
  * brain, and saves what worked so the next time is free.
  */
 class Assistant(
-    private val newBrain: () -> Brain,
+    private val newBrain: suspend () -> Brain,
     private val device: DeviceController,
     private val store: RoutineStore,
     private val config: AgentConfig = AgentConfig(),
     private val listener: AgentListener = object : AgentListener {},
+    /** Direct phone actions (calls, alarms, toggles). Returns null when the command is not one of them. */
+    private val builtIns: BuiltInHandler? = null,
 ) {
-    data class Result(val outcome: AgentOutcome, val replayed: Boolean, val usedAi: Boolean, val saved: Boolean)
+    data class Result(
+        val outcome: AgentOutcome,
+        val replayed: Boolean,
+        val usedAi: Boolean,
+        val saved: Boolean,
+        val builtIn: Boolean = false,
+    )
 
     suspend fun run(command: String): Result {
+        builtIns?.let { handler ->
+            BuiltInCommands.parse(command)?.let { action ->
+                listener.onStatus("Built-in: ${action::class.simpleName}")
+                handler.handle(action)?.let { return Result(it, replayed = false, usedAi = false, saved = false, builtIn = true) }
+            }
+        }
         val match = store.find(command)
         val routine = match?.routine
         val recorder = RoutineRecorder()
@@ -68,4 +82,9 @@ class Assistant(
         }
         return Result(outcome, replayed = routine != null, usedAi = true, saved = saved)
     }
+}
+
+/** Executes a [BuiltIn] on the phone. Return null to let routines and the AI handle it after all. */
+fun interface BuiltInHandler {
+    suspend fun handle(action: BuiltIn): AgentOutcome?
 }

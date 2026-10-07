@@ -100,6 +100,39 @@ For the first tests, turn on **Ask before every tap** in the setup screen, and
 use the **Run typed command** box so you can watch the bubble's status line
 without speaking.
 
+## Built-in commands (no AI involved)
+
+These are recognised by `BuiltInCommands` and executed directly through
+Android by `BuiltInExecutor`, so they are instant and work offline:
+
+| Say | What happens |
+|---|---|
+| call Mum / phone Ravi | looks up the contact and calls (asks which one if several match) |
+| text Mum I'm leaving / sms Dad running late | sends an SMS after you confirm |
+| WhatsApp Priya see you at 6 | opens the chat with the text and taps send after you confirm |
+| message Mum I'll be late | WhatsApp if installed, otherwise SMS (switchable in settings) |
+| email Ravi about the invoice | opens a prefilled email |
+| open Gmail | launches the app |
+| set an alarm for 6:30 am / wake me up at 7 | sets the alarm silently |
+| set a timer for 10 minutes | starts a timer |
+| remind me to call the dentist at 5 pm | alarm with that label |
+| navigate to the airport / take me to X by walking | starts Google Maps directions |
+| where is the nearest pharmacy | shows it on the map |
+| play Coldplay | plays in your default music app |
+| search for best biryani near me / google X | web search |
+| open bbc.com | opens the site |
+| flashlight on/off, volume up/down/mute, volume to 50 percent | device controls |
+| wifi on/off, bluetooth on/off | opens the system panel and taps the switch |
+| add a meeting with Ravi tomorrow at 3 pm | opens a prefilled calendar event |
+| take a photo | opens the camera |
+| what time is it / what's the date / battery level | spoken answer |
+| read the screen | reads the visible text aloud |
+| go home, go back, lock the screen, take a screenshot, open notifications, open settings | system actions |
+| what can you do | reads this list |
+
+Anything that is not one of these goes to the learned routines, then to the
+brain.
+
 ## Good first commands
 
 * "Open the calculator and work out 48 times 12"
@@ -152,6 +185,7 @@ android-agent/
 └── app/src/main/kotlin/com/wildwildyeast/voiceagent/
     ├── AgentAccessibilityService.kt  read tree, tap, type, swipe, screenshot, open app
     ├── NanoModel.kt                  Gemini Nano through the ML Kit Prompt API
+    ├── BuiltInExecutor.kt            runs built-in commands through Android intents and services
     ├── AndroidDevice.kt              DeviceController on top of the service
     ├── OverlayController.kt          floating bubble + question panel
     ├── VoiceInput.kt / Speaker.kt    speech recognition / text to speech

@@ -14,6 +14,11 @@ class Settings(context: Context) {
         get() = prefs.getBoolean("confirm_everything", false)
         set(value) = prefs.edit().putBoolean("confirm_everything", value).apply()
 
+    /** Plain "message X ..." goes by SMS when true, otherwise WhatsApp (if installed). */
+    var messageBySms: Boolean
+        get() = prefs.getBoolean("message_by_sms", false)
+        set(value) = prefs.edit().putBoolean("message_by_sms", value).apply()
+
     /** "local" for on-device Gemini Nano, "claude" for the cloud model. */
     var brain: String
         get() = prefs.getString("brain", BRAIN_LOCAL) ?: BRAIN_LOCAL
